@@ -332,6 +332,19 @@ public sealed class WorkingDirectoryEventArgs : EventArgs
     public string RemotePath { get; }
 }
 
+public sealed class ChangeDirectoryEventArgs : EventArgs
+{
+    public ChangeDirectoryEventArgs(string requestedPath, string newPath)
+    {
+        RequestedPath = requestedPath;
+        NewPath = newPath;
+    }
+
+    public string RequestedPath { get; }
+
+    public string NewPath { get; }
+}
+
 public static class KermitDirectoryListingCodec
 {
     public static string Encode(IEnumerable<KermitDirectoryEntry> entries)

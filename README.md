@@ -25,6 +25,7 @@ Includes:
 - request files from a remote server
 - list remote folders with `LS`
 - get remote working directory with `PWD`
+- change remote directory with `CD`
 - progress events
 - per-command events for packet activity
 
@@ -37,6 +38,7 @@ Includes:
 - handle `GET <file>` generic command
 - handle `LS [folder]` generic command
 - handle `PWD` generic command
+- handle `CD <path>` generic command
 - handle `DELETE <file>` remote command
 - progress events
 - per-command events for packet activity
@@ -82,6 +84,9 @@ Supported generic commands currently include:
 - `LS`
 - `LS <folder>`
 - `PWD`
+- `CD <path>`
+- `CD ..`
+- `CD /`
 
 ## Not yet implemented
 This repository currently provides a strong protocol foundation, but not every advanced Kermit feature is present yet.

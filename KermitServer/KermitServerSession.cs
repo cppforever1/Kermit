@@ -17,6 +17,7 @@ public sealed class KermitServerSession : KermitSessionBase
     private KermitFileMetadata? _uploadMetadata;
     private string? _uploadPath;
     private long _uploadedBytes;
+    private string? _currentDirectory;
 
     public KermitServerSession(IKermitTransport transport, KermitServerOptions? options = null)
         : base(transport, options)
@@ -35,6 +36,8 @@ public sealed class KermitServerSession : KermitSessionBase
     public event EventHandler<DirectoryListingEventArgs>? DirectoryListingSent;
 
     public event EventHandler<WorkingDirectoryEventArgs>? WorkingDirectorySent;
+
+    public event EventHandler<ChangeDirectoryEventArgs>? ChangeDirectorySent;
 
     public async Task SendFileAsync(string fullPath, string? remoteName = null, CancellationToken cancellationToken = default)
     {
@@ -270,6 +273,32 @@ public sealed class KermitServerSession : KermitSessionBase
             return;
         }
 
+        if (command.Equals("CD", StringComparison.OrdinalIgnoreCase) || command.StartsWith("CD ", StringComparison.OrdinalIgnoreCase))
+        {
+            var requestedPath = command.Length > 2 ? command[2..].Trim() : ".";
+            string newDirectory;
+            try
+            {
+                newDirectory = ResolveDirectory(requestedPath);
+            }
+            catch (InvalidOperationException exception)
+            {
+                await SendErrorAsync(packet.Sequence, exception.Message, cancellationToken).ConfigureAwait(false);
+                return;
+            }
+
+            if (!Directory.Exists(newDirectory))
+            {
+                await SendErrorAsync(packet.Sequence, $"Directory not found: {requestedPath}", cancellationToken).ConfigureAwait(false);
+                return;
+            }
+
+            _currentDirectory = newDirectory;
+            await SendAckAsync(packet.Sequence, "CD", cancellationToken).ConfigureAwait(false);
+            await SendChangeDirectoryAsync(requestedPath, newDirectory, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
         await SendAckAsync(packet.Sequence, $"GENERIC:{command}", cancellationToken).ConfigureAwait(false);
     }
 
@@ -341,9 +370,27 @@ public sealed class KermitServerSession : KermitSessionBase
         await SendPacketAsync(KermitPacketType.Break, Encoding.UTF8.GetBytes("EOT"), cancellationToken).ConfigureAwait(false);
     }
 
+    private async Task SendChangeDirectoryAsync(string requestedPath, string newDirectory, CancellationToken cancellationToken)
+    {
+        ChangeDirectorySent?.Invoke(this, new ChangeDirectoryEventArgs(requestedPath, newDirectory));
+
+        await SendPacketAsync(KermitPacketType.TextHeader, Encoding.UTF8.GetBytes("CD"), cancellationToken).ConfigureAwait(false);
+
+        var chunkSize = Math.Max(1, NegotiatedOptions.MaxPacketLength - 12);
+        var payload = Encoding.UTF8.GetBytes(newDirectory);
+        for (var offset = 0; offset < payload.Length; offset += chunkSize)
+        {
+            var count = Math.Min(chunkSize, payload.Length - offset);
+            await SendPacketAsync(KermitPacketType.Data, payload.AsMemory(offset, count), cancellationToken).ConfigureAwait(false);
+        }
+
+        await SendPacketAsync(KermitPacketType.EndOfFile, Encoding.UTF8.GetBytes("EOF"), cancellationToken).ConfigureAwait(false);
+        await SendPacketAsync(KermitPacketType.Break, Encoding.UTF8.GetBytes("EOT"), cancellationToken).ConfigureAwait(false);
+    }
+
     private async Task SendWorkingDirectoryAsync(CancellationToken cancellationToken)
     {
-        var remotePath = Path.GetFullPath(_options.RootDirectory);
+        var remotePath = _currentDirectory ?? Path.GetFullPath(_options.RootDirectory);
         WorkingDirectorySent?.Invoke(this, new WorkingDirectoryEventArgs(remotePath));
 
         await SendPacketAsync(KermitPacketType.TextHeader, Encoding.UTF8.GetBytes("PWD"), cancellationToken).ConfigureAwait(false);
@@ -362,6 +409,23 @@ public sealed class KermitServerSession : KermitSessionBase
 
     private string ResolvePath(string relativePath)
     {
+        var base_ = _currentDirectory ?? Path.GetFullPath(_options.RootDirectory);
+        return ResolveAgainst(relativePath, base_);
+    }
+
+    private string ResolveDirectory(string relativePath)
+    {
+        if (relativePath == "/" || relativePath == "\\" || relativePath == ".")
+        {
+            return Path.GetFullPath(_options.RootDirectory);
+        }
+
+        var base_ = _currentDirectory ?? Path.GetFullPath(_options.RootDirectory);
+        return ResolveAgainst(relativePath, base_);
+    }
+
+    private string ResolveAgainst(string relativePath, string baseDirectory)
+    {
         var normalizedRelativePath = string.IsNullOrWhiteSpace(relativePath) || relativePath == "."
             ? string.Empty
             : relativePath;
@@ -370,7 +434,7 @@ public sealed class KermitServerSession : KermitSessionBase
         var rootWithSeparator = rootPath.EndsWith(Path.DirectorySeparatorChar) || rootPath.EndsWith(Path.AltDirectorySeparatorChar)
             ? rootPath
             : rootPath + Path.DirectorySeparatorChar;
-        var combinedPath = Path.GetFullPath(Path.Combine(rootPath, normalizedRelativePath));
+        var combinedPath = Path.GetFullPath(Path.Combine(baseDirectory, normalizedRelativePath));
         if (!combinedPath.Equals(rootPath, StringComparison.OrdinalIgnoreCase)
             && !combinedPath.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase))
         {

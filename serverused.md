@@ -76,7 +76,36 @@ The server also handles:
 PWD
 ```
 
-The server returns the configured root working directory and raises `WorkingDirectorySent`.
+The server returns the current working directory and raises `WorkingDirectorySent`.
+
+`PWD` always reflects the directory last set by `CD`, starting at `RootDirectory`.
+
+## Client CD command support
+The server also handles:
+
+```text
+CD subfolder
+CD ..
+CD /
+CD .
+```
+
+- `CD subfolder` — changes into a subdirectory
+- `CD ..` — moves up one level
+- `CD /` or `CD .` — returns to `RootDirectory`
+
+Directory traversal outside `RootDirectory` is blocked and returns an error packet.
+
+The server confirms the new directory path and raises `ChangeDirectorySent`.
+
+Subsequent `LS`, `GET`, and `DELETE` commands resolve paths relative to the new current directory.
+
+```csharp
+server.ChangeDirectorySent += (_, e) =>
+{
+    Console.WriteLine($"CD {e.RequestedPath} -> {e.NewPath}");
+};
+```
 
 ## Remote command support
 The server currently handles this remote command form:

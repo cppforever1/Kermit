@@ -22,6 +22,8 @@ public sealed class KermitClientSession : KermitSessionBase
     private string? _directoryListingPath;
     private TaskCompletionSource<string>? _workingDirectoryWaiter;
     private MemoryStream? _workingDirectoryStream;
+    private TaskCompletionSource<string>? _changeDirectoryWaiter;
+    private MemoryStream? _changeDirectoryStream;
 
     public KermitClientSession(IKermitTransport transport, KermitClientOptions? options = null)
         : base(transport, options)
@@ -40,6 +42,8 @@ public sealed class KermitClientSession : KermitSessionBase
     public event EventHandler<DirectoryListingEventArgs>? DirectoryListingReceived;
 
     public event EventHandler<WorkingDirectoryEventArgs>? WorkingDirectoryReceived;
+
+    public event EventHandler<ChangeDirectoryEventArgs>? ChangeDirectoryReceived;
 
     public async Task SendFileAsync(string localFilePath, string? remoteFileName = null, CancellationToken cancellationToken = default)
     {
@@ -161,6 +165,41 @@ public sealed class KermitClientSession : KermitSessionBase
         }
     }
 
+    public async Task<string> ChangeRemoteDirectoryAsync(string remotePath, CancellationToken cancellationToken = default)
+    {
+        if (_changeDirectoryWaiter is not null)
+        {
+            throw new InvalidOperationException("A change directory request is already in progress.");
+        }
+
+        var waiter = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _changeDirectoryWaiter = waiter;
+        _changeDirectoryStream?.Dispose();
+        _changeDirectoryStream = null;
+
+        try
+        {
+            var command = string.IsNullOrWhiteSpace(remotePath) || remotePath == "."
+                ? "CD ."
+                : $"CD {remotePath}";
+
+            var response = await ExchangeAsync(KermitPacketType.GenericCommand, Encoding.UTF8.GetBytes(command), cancellationToken).ConfigureAwait(false);
+            if (response.Type != KermitPacketType.Ack)
+            {
+                throw new InvalidOperationException($"Unexpected response to CD command: {response.Type}");
+            }
+
+            using var registration = cancellationToken.Register(() => waiter.TrySetCanceled(cancellationToken));
+            return await waiter.Task.ConfigureAwait(false);
+        }
+        finally
+        {
+            _changeDirectoryWaiter = null;
+            _changeDirectoryStream?.Dispose();
+            _changeDirectoryStream = null;
+        }
+    }
+
     public async Task<string> GetRemoteWorkingDirectoryAsync(CancellationToken cancellationToken = default)
     {
         if (_workingDirectoryWaiter is not null)
@@ -241,6 +280,11 @@ public sealed class KermitClientSession : KermitSessionBase
             _workingDirectoryStream?.Dispose();
             _workingDirectoryStream = new MemoryStream();
         }
+        else if (header.Equals("CD", StringComparison.OrdinalIgnoreCase))
+        {
+            _changeDirectoryStream?.Dispose();
+            _changeDirectoryStream = new MemoryStream();
+        }
 
         await SendAckAsync(packet.Sequence, "TEXT", cancellationToken).ConfigureAwait(false);
     }
@@ -282,6 +326,13 @@ public sealed class KermitClientSession : KermitSessionBase
 
     private async Task HandleIncomingDataAsync(KermitPacket packet, CancellationToken cancellationToken)
     {
+        if (_changeDirectoryStream is not null)
+        {
+            await _changeDirectoryStream.WriteAsync(packet.Data, cancellationToken).ConfigureAwait(false);
+            await SendAckAsync(packet.Sequence, "DATA", cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
         if (_workingDirectoryStream is not null)
         {
             await _workingDirectoryStream.WriteAsync(packet.Data, cancellationToken).ConfigureAwait(false);
@@ -319,6 +370,12 @@ public sealed class KermitClientSession : KermitSessionBase
 
     private async Task HandleIncomingEndOfFileAsync(KermitPacket packet, CancellationToken cancellationToken)
     {
+        if (_changeDirectoryStream is not null)
+        {
+            await SendAckAsync(packet.Sequence, "EOF", cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
         if (_workingDirectoryStream is not null)
         {
             await SendAckAsync(packet.Sequence, "EOF", cancellationToken).ConfigureAwait(false);
@@ -349,6 +406,16 @@ public sealed class KermitClientSession : KermitSessionBase
     private async Task HandleIncomingBreakAsync(KermitPacket packet, CancellationToken cancellationToken)
     {
         await SendAckAsync(packet.Sequence, "EOT", cancellationToken).ConfigureAwait(false);
+        if (_changeDirectoryStream is not null)
+        {
+            var newPath = Encoding.UTF8.GetString(_changeDirectoryStream.ToArray());
+            ChangeDirectoryReceived?.Invoke(this, new ChangeDirectoryEventArgs(newPath, newPath));
+            _changeDirectoryWaiter?.TrySetResult(newPath);
+            _changeDirectoryStream.Dispose();
+            _changeDirectoryStream = null;
+            return;
+        }
+
         if (_workingDirectoryStream is not null)
         {
             var remotePath = Encoding.UTF8.GetString(_workingDirectoryStream.ToArray());
