@@ -173,9 +173,9 @@ await client.DisposeAsync();
 
 ## Notes
 - Open the session before sending or requesting files.
-- Use `ListRemoteDirectoryAsync()` to issue the remote `LS` command.
-- Use `GetRemoteWorkingDirectoryAsync()` to issue the remote `PWD` command.
-- Use `ChangeRemoteDirectoryAsync(path)` to issue the remote `CD` command.
+- Use `ListRemoteDirectoryAsync()` to issue the remote `ls` command.
+- Use `GetRemoteWorkingDirectoryAsync()` to issue the remote `pwd` command.
+- Use `ChangeRemoteDirectoryAsync(path)` to issue the remote `cd` command.
 - Use matching serial settings on client and server.
 - Current implementation supports the core transfer flow and command events.
 - Advanced Kermit options such as long packets and multi-packet windows are not yet implemented.

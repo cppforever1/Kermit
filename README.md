@@ -23,11 +23,11 @@ Client-side transfer library.
 Includes:
 - upload files to a remote server
 - request files from a remote server
-- list remote folders with `LS`
-- get remote working directory with `PWD`
-- change remote directory with `CD`
-- remove remote files and directories with `RM`
-- create remote directories with `MKDIR`
+- list remote folders with `ls`
+- get remote working directory with `pwd`
+- change remote directory with `cd`
+- remove remote files and directories with `rm`
+- create remote directories with `mkdir`
 - progress events
 - per-command events for packet activity
 
@@ -37,13 +37,13 @@ Server-side transfer library.
 Includes:
 - receive files from a client
 - send files to a client
-- handle `GET <file>` generic command
-- handle `LS [folder]` generic command
-- handle `PWD` generic command
-- handle `CD <path>` generic command
-- handle `RM <path>` generic command
-- handle `MKDIR <path>` generic command
-- handle `DELETE <file>` remote command
+- handle `get <file>` generic command
+- handle `ls [folder]` generic command
+- handle `pwd` generic command
+- handle `cd <path>` generic command
+- handle `rm <path>` generic command
+- handle `mkdir <path>` generic command
+- handle `delete <file>` remote command
 - progress events
 - per-command events for packet activity
 
@@ -84,15 +84,15 @@ Implemented core packet flow:
 - remote command packets
 
 Supported generic commands currently include:
-- `GET <file>`
-- `LS`
-- `LS <folder>`
-- `PWD`
-- `CD <path>`
-- `CD ..`
-- `CD /`
-- `RM <path>`
-- `MKDIR <path>`
+- `get <file>`
+- `ls`
+- `ls <folder>`
+- `pwd`
+- `cd <path>`
+- `cd ..`
+- `cd /`
+- `rm <path>`
+- `mkdir <path>`
 
 ## Not yet implemented
 This repository currently provides a strong protocol foundation, but not every advanced Kermit feature is present yet.

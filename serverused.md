@@ -50,71 +50,71 @@ The server can proactively send a file:
 await server.SendFileAsync(@"C:\data\firmware.bin");
 ```
 
-## Client GET command support
+## Client get command support
 The server already handles a generic client command in the form:
 
 ```text
-GET remote-file-name
+get remote-file-name
 ```
 
 If the file exists under `RootDirectory`, the server acknowledges the request and sends the file.
 
-## Client LS command support
+## Client ls command support
 The server also handles remote folder listing with:
 
 ```text
-LS
-LS folder-name
+ls
+ls folder-name
 ```
 
 The server streams the directory listing back to the client as text and raises `DirectoryListingSent`.
 
-## Client PWD command support
+## Client pwd command support
 The server also handles:
 
 ```text
-PWD
+pwd
 ```
 
 The server returns the current working directory and raises `WorkingDirectorySent`.
 
-`PWD` always reflects the directory last set by `CD`, starting at `RootDirectory`.
+`pwd` always reflects the directory last set by `cd`, starting at `RootDirectory`.
 
-## Client CD command support
+## Client cd command support
 The server also handles:
 
 ```text
-CD subfolder
-CD ..
-CD /
-CD .
+cd subfolder
+cd ..
+cd /
+cd .
 ```
 
-- `CD subfolder` — changes into a subdirectory
-- `CD ..` — moves up one level
-- `CD /` or `CD .` — returns to `RootDirectory`
+- `cd subfolder` — changes into a subdirectory
+- `cd ..` — moves up one level
+- `cd /` or `cd .` — returns to `RootDirectory`
 
 Directory traversal outside `RootDirectory` is blocked and returns an error packet.
 
 The server confirms the new directory path and raises `ChangeDirectorySent`.
 
-Subsequent `LS`, `GET`, and `DELETE` commands resolve paths relative to the new current directory.
+Subsequent `ls`, `get`, and `delete` commands resolve paths relative to the new current directory.
 
 ```csharp
 server.ChangeDirectorySent += (_, e) =>
 {
-    Console.WriteLine($"CD {e.RequestedPath} -> {e.NewPath}");
+    Console.WriteLine($"cd {e.RequestedPath} -> {e.NewPath}");
 };
 ```
 
-## Create a directory (MKDIR)
+## Create a directory (mkdir)
 The server handles the generic command:
 
 ```text
-MKDIR relative-path
+mkdir relative-path
 ```
 
-- The path is resolved relative to the current directory (respecting any previous `CD`).
+- The path is resolved relative to the current directory (respecting any previous `cd`).
 - Intermediate directories are created automatically (equivalent to `mkdir -p`).
 - Paths outside `RootDirectory` are rejected with an error packet.
 - Raises `MakeDirectorySent` on success.
@@ -126,14 +126,14 @@ server.MakeDirectorySent += (_, e) =>
 };
 ```
 
-## Remove a file or directory (RM)
+## Remove a file or directory (rm)
 The server handles the generic command:
 
 ```text
-RM relative-path
+rm relative-path
 ```
 
-- The path is resolved relative to the current directory (respecting any previous `CD`).
+- The path is resolved relative to the current directory (respecting any previous `cd`).
 - Files and **empty** directories are deleted.
 - Non-empty directories and paths outside `RootDirectory` return an error packet.
 - Raises `RemoveSent` on success.
@@ -150,7 +150,7 @@ server.RemoveSent += (_, e) =>
 The server currently handles this remote command form:
 
 ```text
-DELETE file-name
+delete file-name
 ```
 
 If the file exists under `RootDirectory`, it is deleted and acknowledged.
