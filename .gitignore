@@ -1,0 +1,54 @@
+# Build outputs
+bin/
+obj/
+out/
+artifacts/
+
+# User-specific files
+*.user
+*.rsuser
+*.suo
+*.userosscache
+*.sln.docstates
+
+# VS Code
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# Visual Studio
+.vs/
+
+# Rider / ReSharper
+.idea/
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+
+# Logs
+*.log
+logs/
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/
+!packages/build/
+
+# Test and coverage
+TestResults/
+coverage/
+coverage.*
+*.coverage
+*.coveragexml
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Generated local transfer folders
+storage/
+downloads/
