@@ -117,10 +117,10 @@ public sealed class KermitClientSession : KermitSessionBase
 
         try
         {
-            var response = await ExchangeAsync(KermitPacketType.GenericCommand, Encoding.UTF8.GetBytes($"GET {remoteFileName}"), cancellationToken).ConfigureAwait(false);
+            var response = await ExchangeAsync(KermitPacketType.GenericCommand, Encoding.UTF8.GetBytes($"get {remoteFileName}"), cancellationToken).ConfigureAwait(false);
             if (response.Type != KermitPacketType.Ack)
             {
-                throw new InvalidOperationException($"Unexpected response to GET command: {response.Type}");
+                throw new InvalidOperationException($"Unexpected response to get command: {response.Type}");
             }
 
             using var registration = cancellationToken.Register(() => waiter.TrySetCanceled(cancellationToken));
@@ -147,13 +147,13 @@ public sealed class KermitClientSession : KermitSessionBase
         try
         {
             var command = string.IsNullOrWhiteSpace(remotePath) || remotePath == "."
-                ? "LS"
-                : $"LS {remotePath}";
+                ? "ls"
+                : $"ls {remotePath}";
 
             var response = await ExchangeAsync(KermitPacketType.GenericCommand, Encoding.UTF8.GetBytes(command), cancellationToken).ConfigureAwait(false);
             if (response.Type != KermitPacketType.Ack)
             {
-                throw new InvalidOperationException($"Unexpected response to LS command: {response.Type}");
+                throw new InvalidOperationException($"Unexpected response to ls command: {response.Type}");
             }
 
             using var registration = cancellationToken.Register(() => waiter.TrySetCanceled(cancellationToken));
@@ -184,13 +184,13 @@ public sealed class KermitClientSession : KermitSessionBase
         try
         {
             var command = string.IsNullOrWhiteSpace(remotePath) || remotePath == "."
-                ? "CD ."
-                : $"CD {remotePath}";
+                ? "cd ."
+                : $"cd {remotePath}";
 
             var response = await ExchangeAsync(KermitPacketType.GenericCommand, Encoding.UTF8.GetBytes(command), cancellationToken).ConfigureAwait(false);
             if (response.Type != KermitPacketType.Ack)
             {
-                throw new InvalidOperationException($"Unexpected response to CD command: {response.Type}");
+                throw new InvalidOperationException($"Unexpected response to cd command: {response.Type}");
             }
 
             using var registration = cancellationToken.Register(() => waiter.TrySetCanceled(cancellationToken));
@@ -208,12 +208,12 @@ public sealed class KermitClientSession : KermitSessionBase
     {
         var response = await ExchangeAsync(
             KermitPacketType.GenericCommand,
-            Encoding.UTF8.GetBytes($"MKDIR {remotePath}"),
+            Encoding.UTF8.GetBytes($"mkdir {remotePath}"),
             cancellationToken).ConfigureAwait(false);
 
         if (response.Type != KermitPacketType.Ack)
         {
-            throw new InvalidOperationException($"Unexpected response to MKDIR command: {response.Type}");
+            throw new InvalidOperationException($"Unexpected response to mkdir command: {response.Type}");
         }
 
         MakeDirectoryReceived?.Invoke(this, new MakeDirectoryEventArgs(remotePath));
@@ -223,12 +223,12 @@ public sealed class KermitClientSession : KermitSessionBase
     {
         var response = await ExchangeAsync(
             KermitPacketType.GenericCommand,
-            Encoding.UTF8.GetBytes($"RM {remotePath}"),
+            Encoding.UTF8.GetBytes($"rm {remotePath}"),
             cancellationToken).ConfigureAwait(false);
 
         if (response.Type != KermitPacketType.Ack)
         {
-            throw new InvalidOperationException($"Unexpected response to RM command: {response.Type}");
+            throw new InvalidOperationException($"Unexpected response to rm command: {response.Type}");
         }
 
         RemoveReceived?.Invoke(this, new RemoveEventArgs(remotePath, false));
@@ -248,10 +248,10 @@ public sealed class KermitClientSession : KermitSessionBase
 
         try
         {
-            var response = await ExchangeAsync(KermitPacketType.GenericCommand, Encoding.UTF8.GetBytes("PWD"), cancellationToken).ConfigureAwait(false);
+            var response = await ExchangeAsync(KermitPacketType.GenericCommand, Encoding.UTF8.GetBytes("pwd"), cancellationToken).ConfigureAwait(false);
             if (response.Type != KermitPacketType.Ack)
             {
-                throw new InvalidOperationException($"Unexpected response to PWD command: {response.Type}");
+                throw new InvalidOperationException($"Unexpected response to pwd command: {response.Type}");
             }
 
             using var registration = cancellationToken.Register(() => waiter.TrySetCanceled(cancellationToken));
@@ -303,18 +303,18 @@ public sealed class KermitClientSession : KermitSessionBase
     private async Task HandleIncomingTextHeaderAsync(KermitPacket packet, CancellationToken cancellationToken)
     {
         var header = packet.DataAsText.Trim();
-        if (header.StartsWith("LS", StringComparison.OrdinalIgnoreCase))
+        if (header.StartsWith("ls", StringComparison.OrdinalIgnoreCase))
         {
             _directoryListingPath = header.Length > 2 ? header[2..].Trim() : ".";
             _directoryListingStream?.Dispose();
             _directoryListingStream = new MemoryStream();
         }
-        else if (header.Equals("PWD", StringComparison.OrdinalIgnoreCase))
+        else if (header.Equals("pwd", StringComparison.OrdinalIgnoreCase))
         {
             _workingDirectoryStream?.Dispose();
             _workingDirectoryStream = new MemoryStream();
         }
-        else if (header.Equals("CD", StringComparison.OrdinalIgnoreCase))
+        else if (header.Equals("cd", StringComparison.OrdinalIgnoreCase))
         {
             _changeDirectoryStream?.Dispose();
             _changeDirectoryStream = new MemoryStream();

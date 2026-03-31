@@ -84,15 +84,15 @@ Implemented core packet flow:
 - remote command packets
 
 Supported generic commands currently include:
-- `GET <file>`
-- `LS`
-- `LS <folder>`
-- `PWD`
-- `CD <path>`
-- `CD ..`
-- `CD /`
-- `RM <path>`
-- `MKDIR <path>`
+- `get <file>`
+- `ls`
+- `ls <folder>`
+- `pwd`
+- `cd <path>`
+- `cd ..`
+- `cd /`
+- `rm <path>`
+- `mkdir <path>`
 
 ## Not yet implemented
 This repository currently provides a strong protocol foundation, but not every advanced Kermit feature is present yet.
