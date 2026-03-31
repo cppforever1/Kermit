@@ -107,6 +107,26 @@ server.ChangeDirectorySent += (_, e) =>
 };
 ```
 
+## Remove a file or directory (RM)
+The server handles the generic command:
+
+```text
+RM relative-path
+```
+
+- The path is resolved relative to the current directory (respecting any previous `CD`).
+- Files and **empty** directories are deleted.
+- Non-empty directories and paths outside `RootDirectory` return an error packet.
+- Raises `RemoveSent` on success.
+
+```csharp
+server.RemoveSent += (_, e) =>
+{
+    var kind = e.WasDirectory ? "directory" : "file";
+    Console.WriteLine($"Removed {kind}: {e.RemovedPath}");
+};
+```
+
 ## Remote command support
 The server currently handles this remote command form:
 

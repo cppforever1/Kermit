@@ -39,6 +39,8 @@ public sealed class KermitServerSession : KermitSessionBase
 
     public event EventHandler<ChangeDirectoryEventArgs>? ChangeDirectorySent;
 
+    public event EventHandler<RemoveEventArgs>? RemoveSent;
+
     public async Task SendFileAsync(string fullPath, string? remoteName = null, CancellationToken cancellationToken = default)
     {
         var fileInfo = new FileInfo(fullPath);
@@ -296,6 +298,42 @@ public sealed class KermitServerSession : KermitSessionBase
             _currentDirectory = newDirectory;
             await SendAckAsync(packet.Sequence, "CD", cancellationToken).ConfigureAwait(false);
             await SendChangeDirectoryAsync(requestedPath, newDirectory, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (command.StartsWith("RM ", StringComparison.OrdinalIgnoreCase))
+        {
+            var relativePath = command[3..].Trim();
+            string fullPath;
+            try
+            {
+                fullPath = ResolvePath(relativePath);
+            }
+            catch (InvalidOperationException exception)
+            {
+                await SendErrorAsync(packet.Sequence, exception.Message, cancellationToken).ConfigureAwait(false);
+                return;
+            }
+
+            bool wasDirectory;
+            if (Directory.Exists(fullPath))
+            {
+                wasDirectory = true;
+                Directory.Delete(fullPath);
+            }
+            else if (File.Exists(fullPath))
+            {
+                wasDirectory = false;
+                File.Delete(fullPath);
+            }
+            else
+            {
+                await SendErrorAsync(packet.Sequence, $"File or directory not found: {relativePath}", cancellationToken).ConfigureAwait(false);
+                return;
+            }
+
+            RemoveSent?.Invoke(this, new RemoveEventArgs(fullPath, wasDirectory));
+            await SendAckAsync(packet.Sequence, "RM", cancellationToken).ConfigureAwait(false);
             return;
         }
 

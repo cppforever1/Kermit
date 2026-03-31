@@ -102,6 +102,23 @@ var parentPath = await client.ChangeRemoteDirectoryAsync("..");
 var rootPath = await client.ChangeRemoteDirectoryAsync("/");
 ```
 
+## Remove a remote file or directory
+```csharp
+client.RemoveReceived += (_, e) =>
+{
+    var kind = e.WasDirectory ? "directory" : "file";
+    Console.WriteLine($"Removed {kind}: {e.RemovedPath}");
+};
+
+// Remove a file
+await client.RemoveRemoteAsync("old-report.txt");
+
+// Remove an empty directory
+await client.RemoveRemoteAsync("emptydir");
+```
+
+If the path does not exist, or the directory is not empty, the server sends an error packet and `RemoveRemoteAsync` throws `InvalidOperationException`.
+
 ## Packet and command events
 Every major Kermit command already exposes events from the shared base session:
 - `SendInitReceived` / `SendInitSent`

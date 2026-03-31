@@ -345,6 +345,21 @@ public sealed class ChangeDirectoryEventArgs : EventArgs
     public string NewPath { get; }
 }
 
+public sealed class RemoveEventArgs : EventArgs
+{
+    public RemoveEventArgs(string removedPath, bool wasDirectory)
+    {
+        RemovedPath = removedPath;
+        WasDirectory = wasDirectory;
+    }
+
+    /// <summary>Full resolved path of the item that was removed.</summary>
+    public string RemovedPath { get; }
+
+    /// <summary>True when the removed item was a directory; false for a file.</summary>
+    public bool WasDirectory { get; }
+}
+
 public static class KermitDirectoryListingCodec
 {
     public static string Encode(IEnumerable<KermitDirectoryEntry> entries)
