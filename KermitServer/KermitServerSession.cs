@@ -41,6 +41,8 @@ public sealed class KermitServerSession : KermitSessionBase
 
     public event EventHandler<RemoveEventArgs>? RemoveSent;
 
+    public event EventHandler<MakeDirectoryEventArgs>? MakeDirectorySent;
+
     public async Task SendFileAsync(string fullPath, string? remoteName = null, CancellationToken cancellationToken = default)
     {
         var fileInfo = new FileInfo(fullPath);
@@ -334,6 +336,26 @@ public sealed class KermitServerSession : KermitSessionBase
 
             RemoveSent?.Invoke(this, new RemoveEventArgs(fullPath, wasDirectory));
             await SendAckAsync(packet.Sequence, "RM", cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (command.StartsWith("MKDIR ", StringComparison.OrdinalIgnoreCase))
+        {
+            var relativePath = command[6..].Trim();
+            string fullPath;
+            try
+            {
+                fullPath = ResolvePath(relativePath);
+            }
+            catch (InvalidOperationException exception)
+            {
+                await SendErrorAsync(packet.Sequence, exception.Message, cancellationToken).ConfigureAwait(false);
+                return;
+            }
+
+            Directory.CreateDirectory(fullPath);
+            MakeDirectorySent?.Invoke(this, new MakeDirectoryEventArgs(fullPath));
+            await SendAckAsync(packet.Sequence, "MKDIR", cancellationToken).ConfigureAwait(false);
             return;
         }
 

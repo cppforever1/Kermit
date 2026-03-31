@@ -360,6 +360,17 @@ public sealed class RemoveEventArgs : EventArgs
     public bool WasDirectory { get; }
 }
 
+public sealed class MakeDirectoryEventArgs : EventArgs
+{
+    public MakeDirectoryEventArgs(string createdPath)
+    {
+        CreatedPath = createdPath;
+    }
+
+    /// <summary>Full resolved path of the directory that was created.</summary>
+    public string CreatedPath { get; }
+}
+
 public static class KermitDirectoryListingCodec
 {
     public static string Encode(IEnumerable<KermitDirectoryEntry> entries)

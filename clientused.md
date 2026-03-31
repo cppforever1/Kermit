@@ -102,6 +102,18 @@ var parentPath = await client.ChangeRemoteDirectoryAsync("..");
 var rootPath = await client.ChangeRemoteDirectoryAsync("/");
 ```
 
+## Create a remote directory
+```csharp
+client.MakeDirectoryReceived += (_, e) =>
+{
+    Console.WriteLine($"Directory created: {e.CreatedPath}");
+};
+
+await client.MakeRemoteDirectoryAsync("reports/2026");
+```
+
+Intermediate directories are created automatically (equivalent to `mkdir -p`). Paths are resolved relative to the current remote directory.
+
 ## Remove a remote file or directory
 ```csharp
 client.RemoveReceived += (_, e) =>

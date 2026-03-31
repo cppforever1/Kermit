@@ -47,6 +47,8 @@ public sealed class KermitClientSession : KermitSessionBase
 
     public event EventHandler<RemoveEventArgs>? RemoveReceived;
 
+    public event EventHandler<MakeDirectoryEventArgs>? MakeDirectoryReceived;
+
     public async Task SendFileAsync(string localFilePath, string? remoteFileName = null, CancellationToken cancellationToken = default)
     {
         var fileInfo = new FileInfo(localFilePath);
@@ -200,6 +202,21 @@ public sealed class KermitClientSession : KermitSessionBase
             _changeDirectoryStream?.Dispose();
             _changeDirectoryStream = null;
         }
+    }
+
+    public async Task MakeRemoteDirectoryAsync(string remotePath, CancellationToken cancellationToken = default)
+    {
+        var response = await ExchangeAsync(
+            KermitPacketType.GenericCommand,
+            Encoding.UTF8.GetBytes($"MKDIR {remotePath}"),
+            cancellationToken).ConfigureAwait(false);
+
+        if (response.Type != KermitPacketType.Ack)
+        {
+            throw new InvalidOperationException($"Unexpected response to MKDIR command: {response.Type}");
+        }
+
+        MakeDirectoryReceived?.Invoke(this, new MakeDirectoryEventArgs(remotePath));
     }
 
     public async Task RemoveRemoteAsync(string remotePath, CancellationToken cancellationToken = default)

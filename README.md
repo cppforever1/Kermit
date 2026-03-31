@@ -27,6 +27,7 @@ Includes:
 - get remote working directory with `PWD`
 - change remote directory with `CD`
 - remove remote files and directories with `RM`
+- create remote directories with `MKDIR`
 - progress events
 - per-command events for packet activity
 
@@ -41,6 +42,7 @@ Includes:
 - handle `PWD` generic command
 - handle `CD <path>` generic command
 - handle `RM <path>` generic command
+- handle `MKDIR <path>` generic command
 - handle `DELETE <file>` remote command
 - progress events
 - per-command events for packet activity
@@ -90,6 +92,7 @@ Supported generic commands currently include:
 - `CD ..`
 - `CD /`
 - `RM <path>`
+- `MKDIR <path>`
 
 ## Not yet implemented
 This repository currently provides a strong protocol foundation, but not every advanced Kermit feature is present yet.

@@ -107,6 +107,25 @@ server.ChangeDirectorySent += (_, e) =>
 };
 ```
 
+## Create a directory (MKDIR)
+The server handles the generic command:
+
+```text
+MKDIR relative-path
+```
+
+- The path is resolved relative to the current directory (respecting any previous `CD`).
+- Intermediate directories are created automatically (equivalent to `mkdir -p`).
+- Paths outside `RootDirectory` are rejected with an error packet.
+- Raises `MakeDirectorySent` on success.
+
+```csharp
+server.MakeDirectorySent += (_, e) =>
+{
+    Console.WriteLine($"Directory created: {e.CreatedPath}");
+};
+```
+
 ## Remove a file or directory (RM)
 The server handles the generic command:
 
