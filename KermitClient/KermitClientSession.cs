@@ -17,6 +17,9 @@ public sealed class KermitClientSession : KermitSessionBase
     private KermitFileMetadata? _downloadMetadata;
     private string? _downloadPath;
     private long _downloadBytes;
+    private TaskCompletionSource<string>? _directoryListingWaiter;
+    private MemoryStream? _directoryListingStream;
+    private string? _directoryListingPath;
 
     public KermitClientSession(IKermitTransport transport, KermitClientOptions? options = null)
         : base(transport, options)
@@ -31,6 +34,8 @@ public sealed class KermitClientSession : KermitSessionBase
     public event EventHandler<KermitFileTransferEventArgs>? UploadCompleted;
 
     public event EventHandler<KermitFileTransferEventArgs>? DownloadCompleted;
+
+    public event EventHandler<DirectoryListingEventArgs>? DirectoryListingReceived;
 
     public async Task SendFileAsync(string localFilePath, string? remoteFileName = null, CancellationToken cancellationToken = default)
     {
@@ -115,6 +120,43 @@ public sealed class KermitClientSession : KermitSessionBase
         }
     }
 
+    public async Task<IReadOnlyList<KermitDirectoryEntry>> ListRemoteDirectoryAsync(string remotePath = ".", CancellationToken cancellationToken = default)
+    {
+        if (_directoryListingWaiter is not null)
+        {
+            throw new InvalidOperationException("A directory listing request is already in progress.");
+        }
+
+        var waiter = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _directoryListingWaiter = waiter;
+        _directoryListingStream = null;
+        _directoryListingPath = remotePath;
+
+        try
+        {
+            var command = string.IsNullOrWhiteSpace(remotePath) || remotePath == "."
+                ? "LS"
+                : $"LS {remotePath}";
+
+            var response = await ExchangeAsync(KermitPacketType.GenericCommand, Encoding.UTF8.GetBytes(command), cancellationToken).ConfigureAwait(false);
+            if (response.Type != KermitPacketType.Ack)
+            {
+                throw new InvalidOperationException($"Unexpected response to LS command: {response.Type}");
+            }
+
+            using var registration = cancellationToken.Register(() => waiter.TrySetCanceled(cancellationToken));
+            var rawListing = await waiter.Task.ConfigureAwait(false);
+            return KermitDirectoryListingCodec.Decode(rawListing);
+        }
+        finally
+        {
+            _directoryListingWaiter = null;
+            _directoryListingStream?.Dispose();
+            _directoryListingStream = null;
+            _directoryListingPath = null;
+        }
+    }
+
     protected override async Task OnPacketReceivedAsync(KermitPacket packet, CancellationToken cancellationToken)
     {
         switch (packet.Type)
@@ -143,7 +185,24 @@ public sealed class KermitClientSession : KermitSessionBase
             case KermitPacketType.Break:
                 await HandleIncomingBreakAsync(packet, cancellationToken).ConfigureAwait(false);
                 break;
+
+            case KermitPacketType.TextHeader:
+                await HandleIncomingTextHeaderAsync(packet, cancellationToken).ConfigureAwait(false);
+                break;
         }
+    }
+
+    private async Task HandleIncomingTextHeaderAsync(KermitPacket packet, CancellationToken cancellationToken)
+    {
+        var header = packet.DataAsText.Trim();
+        if (header.StartsWith("LS", StringComparison.OrdinalIgnoreCase))
+        {
+            _directoryListingPath = header.Length > 2 ? header[2..].Trim() : ".";
+            _directoryListingStream?.Dispose();
+            _directoryListingStream = new MemoryStream();
+        }
+
+        await SendAckAsync(packet.Sequence, "TEXT", cancellationToken).ConfigureAwait(false);
     }
 
     private async Task HandleIncomingFileHeaderAsync(KermitPacket packet, CancellationToken cancellationToken)
@@ -183,6 +242,13 @@ public sealed class KermitClientSession : KermitSessionBase
 
     private async Task HandleIncomingDataAsync(KermitPacket packet, CancellationToken cancellationToken)
     {
+        if (_directoryListingStream is not null)
+        {
+            await _directoryListingStream.WriteAsync(packet.Data, cancellationToken).ConfigureAwait(false);
+            await SendAckAsync(packet.Sequence, "DATA", cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
         if (_downloadStream is null)
         {
             await SendErrorAsync(packet.Sequence, "Download stream not initialized.", cancellationToken).ConfigureAwait(false);
@@ -206,6 +272,12 @@ public sealed class KermitClientSession : KermitSessionBase
 
     private async Task HandleIncomingEndOfFileAsync(KermitPacket packet, CancellationToken cancellationToken)
     {
+        if (_directoryListingStream is not null)
+        {
+            await SendAckAsync(packet.Sequence, "EOF", cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
         if (_downloadStream is not null)
         {
             await _downloadStream.FlushAsync(cancellationToken).ConfigureAwait(false);
@@ -224,6 +296,18 @@ public sealed class KermitClientSession : KermitSessionBase
     private async Task HandleIncomingBreakAsync(KermitPacket packet, CancellationToken cancellationToken)
     {
         await SendAckAsync(packet.Sequence, "EOT", cancellationToken).ConfigureAwait(false);
+        if (_directoryListingStream is not null)
+        {
+            var rawListing = Encoding.UTF8.GetString(_directoryListingStream.ToArray());
+            var entries = KermitDirectoryListingCodec.Decode(rawListing);
+            DirectoryListingReceived?.Invoke(this, new DirectoryListingEventArgs(_directoryListingPath ?? ".", rawListing, entries));
+            _directoryListingWaiter?.TrySetResult(rawListing);
+            _directoryListingStream.Dispose();
+            _directoryListingStream = null;
+            _directoryListingPath = null;
+            return;
+        }
+
         if (_downloadMetadata is not null && _downloadPath is not null)
         {
             DownloadCompleted?.Invoke(this, new KermitFileTransferEventArgs(_downloadMetadata, _downloadPath));

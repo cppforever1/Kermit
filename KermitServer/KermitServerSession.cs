@@ -32,6 +32,8 @@ public sealed class KermitServerSession : KermitSessionBase
 
     public event EventHandler<KermitFileTransferEventArgs>? DownloadCompleted;
 
+    public event EventHandler<DirectoryListingEventArgs>? DirectoryListingSent;
+
     public async Task SendFileAsync(string fullPath, string? remoteName = null, CancellationToken cancellationToken = default)
     {
         var fileInfo = new FileInfo(fullPath);
@@ -207,7 +209,17 @@ public sealed class KermitServerSession : KermitSessionBase
         if (command.StartsWith("GET ", StringComparison.OrdinalIgnoreCase))
         {
             var relativePath = command[4..].Trim();
-            var fullPath = Path.Combine(_options.RootDirectory, relativePath);
+            string fullPath;
+            try
+            {
+                fullPath = ResolvePath(relativePath);
+            }
+            catch (InvalidOperationException exception)
+            {
+                await SendErrorAsync(packet.Sequence, exception.Message, cancellationToken).ConfigureAwait(false);
+                return;
+            }
+
             if (!File.Exists(fullPath))
             {
                 await SendErrorAsync(packet.Sequence, $"Requested file not found: {relativePath}", cancellationToken).ConfigureAwait(false);
@@ -224,6 +236,31 @@ public sealed class KermitServerSession : KermitSessionBase
             return;
         }
 
+        if (command.Equals("LS", StringComparison.OrdinalIgnoreCase) || command.StartsWith("LS ", StringComparison.OrdinalIgnoreCase))
+        {
+            var relativePath = command.Length > 2 ? command[2..].Trim() : ".";
+            string fullPath;
+            try
+            {
+                fullPath = ResolvePath(relativePath);
+            }
+            catch (InvalidOperationException exception)
+            {
+                await SendErrorAsync(packet.Sequence, exception.Message, cancellationToken).ConfigureAwait(false);
+                return;
+            }
+
+            if (!Directory.Exists(fullPath))
+            {
+                await SendErrorAsync(packet.Sequence, $"Requested directory not found: {relativePath}", cancellationToken).ConfigureAwait(false);
+                return;
+            }
+
+            await SendAckAsync(packet.Sequence, "LS", cancellationToken).ConfigureAwait(false);
+            await SendDirectoryListingAsync(relativePath, fullPath, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
         await SendAckAsync(packet.Sequence, $"GENERIC:{command}", cancellationToken).ConfigureAwait(false);
     }
 
@@ -233,7 +270,17 @@ public sealed class KermitServerSession : KermitSessionBase
         if (command.StartsWith("DELETE ", StringComparison.OrdinalIgnoreCase))
         {
             var relativePath = command[7..].Trim();
-            var fullPath = Path.Combine(_options.RootDirectory, relativePath);
+            string fullPath;
+            try
+            {
+                fullPath = ResolvePath(relativePath);
+            }
+            catch (InvalidOperationException exception)
+            {
+                await SendErrorAsync(packet.Sequence, exception.Message, cancellationToken).ConfigureAwait(false);
+                return;
+            }
+
             if (File.Exists(fullPath))
             {
                 File.Delete(fullPath);
@@ -244,5 +291,64 @@ public sealed class KermitServerSession : KermitSessionBase
         }
 
         await SendAckAsync(packet.Sequence, $"REMOTE:{command}", cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task SendDirectoryListingAsync(string remotePath, string fullPath, CancellationToken cancellationToken)
+    {
+        var entries = Directory
+            .EnumerateFileSystemEntries(fullPath)
+            .Select(path =>
+            {
+                var attributes = File.GetAttributes(path);
+                var isDirectory = attributes.HasFlag(FileAttributes.Directory);
+                var info = isDirectory
+                    ? new DirectoryInfo(path)
+                    : new FileInfo(path) as FileSystemInfo;
+
+                return new KermitDirectoryEntry(
+                    Path.GetFileName(path),
+                    isDirectory,
+                    info is FileInfo fileInfo ? fileInfo.Length : null,
+                    info.LastWriteTimeUtc);
+            })
+            .OrderBy(static entry => entry.IsDirectory ? 0 : 1)
+            .ThenBy(static entry => entry.Name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        var listing = KermitDirectoryListingCodec.Encode(entries);
+        DirectoryListingSent?.Invoke(this, new DirectoryListingEventArgs(remotePath, listing, entries));
+
+        await SendPacketAsync(KermitPacketType.TextHeader, Encoding.UTF8.GetBytes($"LS {remotePath}"), cancellationToken).ConfigureAwait(false);
+
+        var chunkSize = Math.Max(1, NegotiatedOptions.MaxPacketLength - 12);
+        var payload = Encoding.UTF8.GetBytes(listing);
+        for (var offset = 0; offset < payload.Length; offset += chunkSize)
+        {
+            var count = Math.Min(chunkSize, payload.Length - offset);
+            await SendPacketAsync(KermitPacketType.Data, payload.AsMemory(offset, count), cancellationToken).ConfigureAwait(false);
+        }
+
+        await SendPacketAsync(KermitPacketType.EndOfFile, Encoding.UTF8.GetBytes("EOF"), cancellationToken).ConfigureAwait(false);
+        await SendPacketAsync(KermitPacketType.Break, Encoding.UTF8.GetBytes("EOT"), cancellationToken).ConfigureAwait(false);
+    }
+
+    private string ResolvePath(string relativePath)
+    {
+        var normalizedRelativePath = string.IsNullOrWhiteSpace(relativePath) || relativePath == "."
+            ? string.Empty
+            : relativePath;
+
+        var rootPath = Path.GetFullPath(_options.RootDirectory);
+        var rootWithSeparator = rootPath.EndsWith(Path.DirectorySeparatorChar) || rootPath.EndsWith(Path.AltDirectorySeparatorChar)
+            ? rootPath
+            : rootPath + Path.DirectorySeparatorChar;
+        var combinedPath = Path.GetFullPath(Path.Combine(rootPath, normalizedRelativePath));
+        if (!combinedPath.Equals(rootPath, StringComparison.OrdinalIgnoreCase)
+            && !combinedPath.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("Path escapes the configured root directory.");
+        }
+
+        return combinedPath;
     }
 }

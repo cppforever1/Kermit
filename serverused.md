@@ -59,6 +59,16 @@ GET remote-file-name
 
 If the file exists under `RootDirectory`, the server acknowledges the request and sends the file.
 
+## Client LS command support
+The server also handles remote folder listing with:
+
+```text
+LS
+LS folder-name
+```
+
+The server streams the directory listing back to the client as text and raises `DirectoryListingSent`.
+
 ## Remote command support
 The server currently handles this remote command form:
 
@@ -90,6 +100,11 @@ Example:
 server.GenericCommandReceived += (_, e) =>
 {
     Console.WriteLine($"Generic command: {e.Command}");
+};
+
+server.DirectoryListingSent += (_, e) =>
+{
+    Console.WriteLine($"Listed {e.RemotePath}: {e.Entries.Count} entries");
 };
 
 server.RemoteCommandReceived += (_, e) =>

@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 
 namespace KermitCommon;
 
@@ -297,6 +298,65 @@ public sealed class KermitFileTransferEventArgs : EventArgs
     public KermitFileMetadata Metadata { get; }
 
     public string FullPath { get; }
+}
+
+public sealed record KermitDirectoryEntry(
+    string Name,
+    bool IsDirectory,
+    long? Size,
+    DateTimeOffset LastWriteTimeUtc);
+
+public sealed class DirectoryListingEventArgs : EventArgs
+{
+    public DirectoryListingEventArgs(string remotePath, string rawListing, IReadOnlyList<KermitDirectoryEntry> entries)
+    {
+        RemotePath = remotePath;
+        RawListing = rawListing;
+        Entries = entries;
+    }
+
+    public string RemotePath { get; }
+
+    public string RawListing { get; }
+
+    public IReadOnlyList<KermitDirectoryEntry> Entries { get; }
+}
+
+public static class KermitDirectoryListingCodec
+{
+    public static string Encode(IEnumerable<KermitDirectoryEntry> entries)
+    {
+        return string.Join(
+            Environment.NewLine,
+            entries.Select(static entry => string.Join('|',
+                entry.IsDirectory ? "D" : "F",
+                Uri.EscapeDataString(entry.Name),
+                entry.Size?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
+                entry.LastWriteTimeUtc.UtcDateTime.ToString("O", CultureInfo.InvariantCulture))));
+    }
+
+    public static IReadOnlyList<KermitDirectoryEntry> Decode(string rawListing)
+    {
+        var entries = new List<KermitDirectoryEntry>();
+        foreach (var line in rawListing.Split(["\r\n", "\n"], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var parts = line.Split('|', 4, StringSplitOptions.None);
+            if (parts.Length != 4)
+            {
+                continue;
+            }
+
+            entries.Add(new KermitDirectoryEntry(
+                Uri.UnescapeDataString(parts[1]),
+                string.Equals(parts[0], "D", StringComparison.OrdinalIgnoreCase),
+                long.TryParse(parts[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out var size) ? size : null,
+                DateTimeOffset.TryParse(parts[3], CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var lastWriteTime)
+                    ? lastWriteTime.ToUniversalTime()
+                    : DateTimeOffset.MinValue));
+        }
+
+        return entries;
+    }
 }
 
 public static class KermitPacketTypeExtensions

@@ -23,6 +23,7 @@ Client-side transfer library.
 Includes:
 - upload files to a remote server
 - request files from a remote server
+- list remote folders with `LS`
 - progress events
 - per-command events for packet activity
 
@@ -33,6 +34,7 @@ Includes:
 - receive files from a client
 - send files to a client
 - handle `GET <file>` generic command
+- handle `LS [folder]` generic command
 - handle `DELETE <file>` remote command
 - progress events
 - per-command events for packet activity
@@ -73,6 +75,11 @@ Implemented core packet flow:
 - generic command packets
 - remote command packets
 
+Supported generic commands currently include:
+- `GET <file>`
+- `LS`
+- `LS <folder>`
+
 ## Not yet implemented
 This repository currently provides a strong protocol foundation, but not every advanced Kermit feature is present yet.
 
@@ -99,6 +106,16 @@ dotnet build Kermit.slnx
 See:
 - [clientused.md](clientused.md)
 - [serverused.md](serverused.md)
+
+## Remote folder listing example
+```csharp
+var entries = await client.ListRemoteDirectoryAsync(".");
+
+foreach (var entry in entries)
+{
+    Console.WriteLine($"{(entry.IsDirectory ? "<DIR>" : "FILE ")} {entry.Name} {entry.Size}");
+}
+```
 
 ## Example client setup
 ```csharp
