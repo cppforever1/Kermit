@@ -24,6 +24,7 @@ Includes:
 - upload files to a remote server
 - request files from a remote server
 - list remote folders with `LS`
+- get remote working directory with `PWD`
 - progress events
 - per-command events for packet activity
 
@@ -35,6 +36,7 @@ Includes:
 - send files to a client
 - handle `GET <file>` generic command
 - handle `LS [folder]` generic command
+- handle `PWD` generic command
 - handle `DELETE <file>` remote command
 - progress events
 - per-command events for packet activity
@@ -79,6 +81,7 @@ Supported generic commands currently include:
 - `GET <file>`
 - `LS`
 - `LS <folder>`
+- `PWD`
 
 ## Not yet implemented
 This repository currently provides a strong protocol foundation, but not every advanced Kermit feature is present yet.
@@ -115,6 +118,12 @@ foreach (var entry in entries)
 {
     Console.WriteLine($"{(entry.IsDirectory ? "<DIR>" : "FILE ")} {entry.Name} {entry.Size}");
 }
+```
+
+## Remote working directory example
+```csharp
+var remotePath = await client.GetRemoteWorkingDirectoryAsync();
+Console.WriteLine(remotePath);
 ```
 
 ## Example client setup

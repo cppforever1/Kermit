@@ -69,6 +69,15 @@ LS folder-name
 
 The server streams the directory listing back to the client as text and raises `DirectoryListingSent`.
 
+## Client PWD command support
+The server also handles:
+
+```text
+PWD
+```
+
+The server returns the configured root working directory and raises `WorkingDirectorySent`.
+
 ## Remote command support
 The server currently handles this remote command form:
 
@@ -105,6 +114,11 @@ server.GenericCommandReceived += (_, e) =>
 server.DirectoryListingSent += (_, e) =>
 {
     Console.WriteLine($"Listed {e.RemotePath}: {e.Entries.Count} entries");
+};
+
+server.WorkingDirectorySent += (_, e) =>
+{
+    Console.WriteLine($"PWD: {e.RemotePath}");
 };
 
 server.RemoteCommandReceived += (_, e) =>

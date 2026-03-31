@@ -74,6 +74,17 @@ var entries = await client.ListRemoteDirectoryAsync(".");
 Console.WriteLine($"Entries: {entries.Count}");
 ```
 
+## Get remote working directory
+```csharp
+client.WorkingDirectoryReceived += (_, e) =>
+{
+    Console.WriteLine($"Remote path: {e.RemotePath}");
+};
+
+var remotePath = await client.GetRemoteWorkingDirectoryAsync();
+Console.WriteLine(remotePath);
+```
+
 ## Packet and command events
 Every major Kermit command already exposes events from the shared base session:
 - `SendInitReceived` / `SendInitSent`
@@ -117,6 +128,7 @@ await client.DisposeAsync();
 ## Notes
 - Open the session before sending or requesting files.
 - Use `ListRemoteDirectoryAsync()` to issue the remote `LS` command.
+- Use `GetRemoteWorkingDirectoryAsync()` to issue the remote `PWD` command.
 - Use matching serial settings on client and server.
 - Current implementation supports the core transfer flow and command events.
 - Advanced Kermit options such as long packets and multi-packet windows are not yet implemented.

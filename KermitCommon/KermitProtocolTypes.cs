@@ -322,6 +322,16 @@ public sealed class DirectoryListingEventArgs : EventArgs
     public IReadOnlyList<KermitDirectoryEntry> Entries { get; }
 }
 
+public sealed class WorkingDirectoryEventArgs : EventArgs
+{
+    public WorkingDirectoryEventArgs(string remotePath)
+    {
+        RemotePath = remotePath;
+    }
+
+    public string RemotePath { get; }
+}
+
 public static class KermitDirectoryListingCodec
 {
     public static string Encode(IEnumerable<KermitDirectoryEntry> entries)

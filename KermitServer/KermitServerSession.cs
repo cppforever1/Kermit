@@ -34,6 +34,8 @@ public sealed class KermitServerSession : KermitSessionBase
 
     public event EventHandler<DirectoryListingEventArgs>? DirectoryListingSent;
 
+    public event EventHandler<WorkingDirectoryEventArgs>? WorkingDirectorySent;
+
     public async Task SendFileAsync(string fullPath, string? remoteName = null, CancellationToken cancellationToken = default)
     {
         var fileInfo = new FileInfo(fullPath);
@@ -261,6 +263,13 @@ public sealed class KermitServerSession : KermitSessionBase
             return;
         }
 
+        if (command.Equals("PWD", StringComparison.OrdinalIgnoreCase))
+        {
+            await SendAckAsync(packet.Sequence, "PWD", cancellationToken).ConfigureAwait(false);
+            await SendWorkingDirectoryAsync(cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
         await SendAckAsync(packet.Sequence, $"GENERIC:{command}", cancellationToken).ConfigureAwait(false);
     }
 
@@ -322,6 +331,25 @@ public sealed class KermitServerSession : KermitSessionBase
 
         var chunkSize = Math.Max(1, NegotiatedOptions.MaxPacketLength - 12);
         var payload = Encoding.UTF8.GetBytes(listing);
+        for (var offset = 0; offset < payload.Length; offset += chunkSize)
+        {
+            var count = Math.Min(chunkSize, payload.Length - offset);
+            await SendPacketAsync(KermitPacketType.Data, payload.AsMemory(offset, count), cancellationToken).ConfigureAwait(false);
+        }
+
+        await SendPacketAsync(KermitPacketType.EndOfFile, Encoding.UTF8.GetBytes("EOF"), cancellationToken).ConfigureAwait(false);
+        await SendPacketAsync(KermitPacketType.Break, Encoding.UTF8.GetBytes("EOT"), cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task SendWorkingDirectoryAsync(CancellationToken cancellationToken)
+    {
+        var remotePath = Path.GetFullPath(_options.RootDirectory);
+        WorkingDirectorySent?.Invoke(this, new WorkingDirectoryEventArgs(remotePath));
+
+        await SendPacketAsync(KermitPacketType.TextHeader, Encoding.UTF8.GetBytes("PWD"), cancellationToken).ConfigureAwait(false);
+
+        var chunkSize = Math.Max(1, NegotiatedOptions.MaxPacketLength - 12);
+        var payload = Encoding.UTF8.GetBytes(remotePath);
         for (var offset = 0; offset < payload.Length; offset += chunkSize)
         {
             var count = Math.Min(chunkSize, payload.Length - offset);
